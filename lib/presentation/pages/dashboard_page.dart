@@ -14,7 +14,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final List<TransactionModel> _transactions = [
     TransactionModel(
       id: "1",
-      title: "Salary",
+      title: "Salario",
       amount: 1500,
       type: TransactionType.income,
     ),
@@ -26,7 +26,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ),
     TransactionModel(
       id: "3",
-      title: "Groceries",
+      title: "Super",
       amount: 60.50,
       type: TransactionType.expense,
     ),
@@ -89,7 +89,7 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Gasto semanal (demo)"),
+            const Text("Gasto semanal"),
             const SizedBox(height: 10),
             SizedBox(
               height: 60,
