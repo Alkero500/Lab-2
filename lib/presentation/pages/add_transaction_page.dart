@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/transaction_model.dart';
+import '../../features/transactions/data/datasources/transaction_local_datasource.dart';
 
 class AddTransactionPage extends StatefulWidget {
   const AddTransactionPage({super.key});
@@ -9,10 +10,13 @@ class AddTransactionPage extends StatefulWidget {
 }
 
 class _AddTransactionPageState extends State<AddTransactionPage> {
+  final _ds = TransactionLocalDataSource();
+
   final _amountController = TextEditingController();
   final _descController = TextEditingController();
 
   TransactionType _type = TransactionType.expense;
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -21,10 +25,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final amountText = _amountController.text.trim();
     final descText = _descController.text.trim();
-
     final amount = double.tryParse(amountText);
 
     if (amount == null || amount <= 0 || descText.isEmpty) {
@@ -34,14 +37,32 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       return;
     }
 
-    final tx = TransactionModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: descText,
-      amount: amount,
-      type: _type,
-    );
+    setState(() => _saving = true);
 
-    Navigator.pop(context, tx); // regresamos la transacción al Dashboard
+    try {
+      final tx = TransactionModel(
+        title: descText,
+        amount: amount,
+        type: _type,
+      );
+
+      await _ds.insertTransaction(tx);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Transacción guardada")),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error guardando: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -97,9 +118,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: _save,
-                icon: const Icon(Icons.save),
-                label: const Text("Guardar"),
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+                label: Text(_saving ? "Guardando..." : "Guardar"),
               ),
             ),
           ],

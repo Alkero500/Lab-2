@@ -3,8 +3,15 @@ import '../../data/transaction_model.dart';
 
 class TransactionItem extends StatelessWidget {
   final TransactionModel tx;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const TransactionItem({super.key, required this.tx});
+  const TransactionItem({
+    super.key,
+    required this.tx,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,15 +24,26 @@ class TransactionItem extends StatelessWidget {
           color: isIncome ? Colors.green : Colors.red,
         ),
         title: Text(tx.title),
-        subtitle: Text(
-          "${tx.createdAt.day}/${tx.createdAt.month}/${tx.createdAt.year}",
-        ),
-        trailing: Text(
-          (isIncome ? "+ " : "- ") + tx.amount.toStringAsFixed(2),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isIncome ? Colors.green : Colors.red,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              (isIncome ? "+ " : "- ") + tx.amount.toStringAsFixed(2),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isIncome ? Colors.green : Colors.red,
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: onEdit,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: onDelete,
+            ),
+          ],
         ),
       ),
     );

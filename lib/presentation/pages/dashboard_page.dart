@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import '../../data/transaction_model.dart';
+import '../../features/transactions/data/datasources/transaction_local_datasource.dart';
 import '../widgets/transaction_item.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -11,26 +12,33 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  final List<TransactionModel> _transactions = [
-    TransactionModel(
-      id: "1",
-      title: "Salario",
-      amount: 1500,
-      type: TransactionType.income,
-    ),
-    TransactionModel(
-      id: "2",
-      title: "Netflix",
-      amount: 12.99,
-      type: TransactionType.expense,
-    ),
-    TransactionModel(
-      id: "3",
-      title: "Super",
-      amount: 60.50,
-      type: TransactionType.expense,
-    ),
-  ];
+  final _ds = TransactionLocalDataSource();
+
+  bool _loading = true;
+  List<TransactionModel> _transactions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _loading = true);
+
+    try {
+      final list = await _ds.getTransactions();
+      setState(() => _transactions = list);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error cargando BD: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   double get _balance {
     double total = 0;
@@ -43,10 +51,115 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _goToAddTransaction() async {
     final result = await Navigator.pushNamed(context, '/add-transaction');
 
-    if (result is TransactionModel) {
-      setState(() {
-        _transactions.insert(0, result);
-      });
+    // No dependemos del "result": recargamos desde BD para asegurar persistencia
+    await _loadTransactions();
+  }
+
+  Future<void> _deleteTx(TransactionModel tx) async {
+    if (tx.id == null) return;
+
+    try {
+      await _ds.deleteTransaction(tx.id!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Transacción eliminada")),
+        );
+      }
+      await _loadTransactions();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error borrando: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _editTx(TransactionModel tx) async {
+    final titleCtrl = TextEditingController(text: tx.title);
+    final amountCtrl = TextEditingController(text: tx.amount.toStringAsFixed(2));
+    TransactionType type = tx.type;
+
+    final updated = await showDialog<TransactionModel>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Editar transacción"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: "Descripción"),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Monto"),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<TransactionType>(
+                value: type,
+                items: const [
+                  DropdownMenuItem(
+                    value: TransactionType.expense,
+                    child: Text("Gasto"),
+                  ),
+                  DropdownMenuItem(
+                    value: TransactionType.income,
+                    child: Text("Ingreso"),
+                  ),
+                ],
+                onChanged: (v) => type = v ?? type,
+              )
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final t = titleCtrl.text.trim();
+                final a = double.tryParse(amountCtrl.text.trim());
+
+                if (t.isEmpty || a == null || a <= 0) return;
+
+                Navigator.pop(
+                  context,
+                  TransactionModel(
+                    id: tx.id,
+                    title: t,
+                    amount: a,
+                    type: type,
+                  ),
+                );
+              },
+              child: const Text("Guardar"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (updated == null) return;
+
+    try {
+      await _ds.updateTransaction(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Transacción actualizada")),
+        );
+      }
+      await _loadTransactions();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error actualizando: $e")),
+        );
+      }
     }
   }
 
@@ -63,10 +176,7 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Saldo Total",
-              style: TextStyle(color: Colors.white70),
-            ),
+            const Text("Saldo Total", style: TextStyle(color: Colors.white70)),
             const SizedBox(height: 6),
             Text(
               "\$ ${_balance.toStringAsFixed(2)}",
@@ -74,42 +184,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 color: Colors.white,
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _miniChart() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Gasto semanal"),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 60,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(7, (i) {
-                  final heights = [20, 45, 30, 55, 25, 40, 35];
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Container(
-                        height: heights[i].toDouble(),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
               ),
             ),
           ],
@@ -132,15 +206,22 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             _balanceCard(),
             const SizedBox(height: 12),
-            _miniChart(),
-            const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                itemCount: _transactions.length,
-                itemBuilder: (context, index) {
-                  return TransactionItem(tx: _transactions[index]);
-                },
-              ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _transactions.isEmpty
+                      ? const Center(child: Text("No hay transacciones aún"))
+                      : ListView.builder(
+                          itemCount: _transactions.length,
+                          itemBuilder: (context, index) {
+                            final tx = _transactions[index];
+                            return TransactionItem(
+                              tx: tx,
+                              onEdit: () => _editTx(tx),
+                              onDelete: () => _deleteTx(tx),
+                            );
+                          },
+                        ),
             ),
           ],
         ),
