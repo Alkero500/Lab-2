@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../data/transaction_model.dart';
 import '../../features/transactions/data/datasources/transaction_local_datasource.dart';
 
@@ -26,13 +28,21 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   Future<void> _save() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No hay sesión activa. Inicia sesión.")),
+      );
+      return;
+    }
+
     final amountText = _amountController.text.trim();
     final descText = _descController.text.trim();
     final amount = double.tryParse(amountText);
 
     if (amount == null || amount <= 0 || descText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Revisá: monto válido y descripción.")),
+        const SnackBar(content: Text("Revisa: monto válido y descripción.")),
       );
       return;
     }
@@ -41,6 +51,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     try {
       final tx = TransactionModel(
+        userId: uid,
         title: descText,
         amount: amount,
         type: _type,
@@ -48,12 +59,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
       await _ds.insertTransaction(tx);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Transacción guardada")),
-        );
-        Navigator.pop(context, true);
-      }
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -68,7 +74,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Add Transaction")),
+      appBar: AppBar(title: const Text("Agregar transacción")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

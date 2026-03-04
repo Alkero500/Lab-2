@@ -9,7 +9,6 @@ class TransactionLocalDataSource {
     try {
       final db = await _dbHelper.database;
 
-      // No mandamos id porque es AUTOINCREMENT
       final map = tx.toMap()..remove('id');
 
       return await db.insert(
@@ -22,13 +21,14 @@ class TransactionLocalDataSource {
     }
   }
 
-  Future<List<TransactionModel>> getTransactions() async {
+  Future<List<TransactionModel>> getTransactions(String userId) async {
     try {
       final db = await _dbHelper.database;
 
-      // REQUERIMIENTO: orderBy id DESC
       final result = await db.query(
         DatabaseHelper.tableTransactions,
+        where: 'user_id = ?',
+        whereArgs: [userId],
         orderBy: 'id DESC',
       );
 
@@ -42,29 +42,27 @@ class TransactionLocalDataSource {
     try {
       final db = await _dbHelper.database;
 
-      if (tx.id == null) {
-        throw Exception("No se puede actualizar: id es null");
-      }
+      if (tx.id == null) throw Exception("No se puede actualizar: id es null");
 
       return await db.update(
         DatabaseHelper.tableTransactions,
         tx.toMap()..remove('id'),
-        where: 'id = ?',
-        whereArgs: [tx.id],
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [tx.id, tx.userId],
       );
     } catch (e) {
       throw Exception("Error actualizando transacción: $e");
     }
   }
 
-  Future<int> deleteTransaction(int id) async {
+  Future<int> deleteTransaction(int id, String userId) async {
     try {
       final db = await _dbHelper.database;
 
       return await db.delete(
         DatabaseHelper.tableTransactions,
-        where: 'id = ?',
-        whereArgs: [id],
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [id, userId],
       );
     } catch (e) {
       throw Exception("Error borrando transacción: $e");
